@@ -10,7 +10,7 @@
 #define DHTPIN 4 //датчик температуры и влажности 
 #define MOSFET 5 // транзистор на датчик влажности почвы
 
-#define DHTTYPE DHT11
+#define DHTTYPE DHT11 /123
 
 
 iarduino_RTC watch(RTC_DS1302,8,6,7);
