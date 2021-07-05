@@ -1,3 +1,5 @@
+
+
 #include <DHT.h>
 #include <SPI.h>
 #include <SD.h>
@@ -24,12 +26,14 @@ const int chipSelect = 10;
 int day = 0;
 int watrDay = 0;  // переменная частоты полива в днях Э каждые watrDay дня Э
 int timeout = 5; // переменная в минутах. таймаут пополнение бочки. на случай выхода из строя геркона.
+int wDayNow = 0;
 bool flag1 = true, flag2 = true, flag3 = true, flag4 = true, flag5 = true, flag6 = true;
 bool test = true;
 bool timer1 = false;  // таймер полива теплицы 
 bool barrel = false;  // если был полив теплицы переменная тру, нужно пополнить бочку. 
 bool timer2 = false;  // таймер сигнализирующий о том что бочка пополняется 
 bool gerkon = false;  // переменная датчика уровня воды в бочке
+bool powerFlag = true;
 int bMin = 0, bHrs = 0; // переменные для корректировки времени таймеранаполнения бочки 
 
 void setup() {
@@ -50,6 +54,15 @@ void setup() {
     
     pinMode(MOSFET, OUTPUT); // Объявляем пин реле как выход
   digitalWrite(MOSFET, LOW); // Выключаем транзистор низкий сигнал  
+
+
+//**************************проверка на отключение питания и восстановление текущего дня полива.
+  File dataFile = SD.open("datalog.txt", FILE_WRITE);
+  if (dataFile.read() != -1){
+    dataFile.read(); // понять как идет считывание, выбрать тип переменной, 
+    }
+  dayFile.close();
+  
 }
 
 
@@ -65,12 +78,12 @@ int i = 0;
 if(hrs == 0 && m == 0 && s == 0 && flag2 == true){ // счетчик нового дня 
   flag2 = false; 
   day++;
-  
+  wDayNow++;
   File dayFile = SD.open("daylog.txt", FILE_WRITE);
   dayFile.println(day);
   dayFile.close();
   
-  timer1 = true;
+  
   File dataFile = SD.open("datalog.txt", FILE_WRITE);
   dataFile.println();
   dataFile.print(watch.gettime("d-m-Y, H:i:s, D"));
@@ -126,16 +139,16 @@ if (hrs < 8 && hrs % 2 == 0 && m == 0 &&  flag3 == true || hrs > 20 && hrs % 2 =
  }
  
  
- if (day == watrDay && hrs == 18 && m == 0 && s == 0 && flag4 == true){ // время полива 
+ if (wDayNow == watrDay && hrs == 18 && m == 0 && s == 0 && flag4 == true){ // время полива 
     
  timer1 = true; // запуск таймера 
  flag4 = false;
   
-    day = 0;
-   File dayFile = SD.open("daylog.txt", FILE_WRITE);  // запись нулевого дня для калибровки в случе отклоючения питания 
-    dayFile.println(day);
-   dayFile.close();
    
+   File dayFile = SD.open("daylog.txt", FILE_WRITE);  // запись нулевого дня для калибровки в случе отклоючения питания 
+    dayFile.println(wDayNow);
+   dayFile.close();
+    wDayNow = 0;
   digitalWrite(RELAY_W, HIGH);  // watering on 
  
    File dataFile = SD.open("datalog.txt", FILE_WRITE);
@@ -236,7 +249,7 @@ if (hrs == 18 && m == 16 && flag5 == true || hrs == 20 && m == 0 && flag5 == tru
        }
     }
   }
-  
+
   if(m == 10 && s == 0 || m == 40 && s == 0) {  // сброс флагов раз в пол часа
     flag1 = true; flag2 = true; flag3 = true; flag4 = true; flag5 = true; flag6 = true;
     }
