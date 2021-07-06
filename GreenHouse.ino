@@ -1,5 +1,4 @@
 
-
 #include <DHT.h>
 #include <SPI.h>
 #include <SD.h>
@@ -26,7 +25,7 @@ const int chipSelect = 10;
 int day = 0;
 int watrDay = 0;  // переменная частоты полива в днях Э каждые watrDay дня Э
 int timeout = 5; // переменная в минутах. таймаут пополнение бочки. на случай выхода из строя геркона.
-int wDayNow = 0;
+int wDayNow = 0; // день до полива
 bool flag1 = true, flag2 = true, flag3 = true, flag4 = true, flag5 = true, flag6 = true;
 bool test = true;
 bool timer1 = false;  // таймер полива теплицы 
@@ -34,8 +33,11 @@ bool barrel = false;  // если был полив теплицы переме�
 bool timer2 = false;  // таймер сигнализирующий о том что бочка пополняется 
 bool gerkon = false;  // переменная датчика уровня воды в бочке
 bool powerFlag = true;
+bool WATERING = false; // переменная сигнализирующая, что в фактическое время полива, питание на МК было снято и он небыл осуществлен
+bool WATERINGtimer = false; // переменная для таймера по WATERING 
 int bMin = 0, bHrs = 0; // переменные для корректировки времени таймеранаполнения бочки 
-
+int wHrs = 18, wMin = 0; // тут записано время полива МОЖНО КОРРЕКТИРОВАТЬ 
+int WATERINGmin = 0, WATERINGhrs = 0;  
 void setup() {
   watch.begin();
   watch.settime(40,59,17,16,6,21,3);
@@ -57,10 +59,19 @@ void setup() {
 
 
 //**************************проверка на отключение питания и восстановление текущего дня полива.
-  File dataFile = SD.open("datalog.txt", FILE_WRITE);
-  if (dataFile.read() != -1){
-    dataFile.read(); // понять как идет считывание, выбрать тип переменной, 
-    }
+  File dayFile = SD.open("daylog.txt", FILE_WRITE);
+    if (dayFile.read() != -1){ // понять как идет считывание, выбрать тип переменной, 
+    wDayNow = dayFile.read();
+    watch.gettime();
+int hrs = watch.Hours;
+int m = watch.minutes;
+        if(wDayNow >= watrDay && hrs >= wHrs && m >= wMin ){ // сравнение дня и времени полива, для понимания был ли пропущен полив из за снятия питания
+          WATERING = true; 
+          }
+    } else {
+      wDayNow = 0;
+      }
+    
   dayFile.close();
   
 }
@@ -137,18 +148,44 @@ if (hrs < 8 && hrs % 2 == 0 && m == 0 &&  flag3 == true || hrs > 20 && hrs % 2 =
      }
    }
  }
+
+
+
+
+
+
+
+
+
+
  
  
- if (wDayNow == watrDay && hrs == 18 && m == 0 && s == 0 && flag4 == true){ // время полива 
-    
- timer1 = true; // запуск таймера 
- flag4 = false;
-  
+ if (wDayNow == watrDay && hrs == wHrs && m == wMin && s == 0 && flag4 == true || WATERING == true && flag4 == true){ // время полива //если WATERING то нужно написать таймер для WATERING
    
+    if(WATERING == true){
+      WATERING = false; 
+      WATERINGtimer = true;
+      WATERINGhrs = hrs + wHrs;//WATERING фиксация времени начала полива и прибавление времени полива с учетом минут часов
+      WATERINGmin = m + wMin;
+
+      if (WATERINGmin > 60){   //поправка при выходе минут за границы 60мин
+          WATERINGmin = WATERINGmin - 60;
+          WATERINGhrs++;
+          if(WATERINGhrs > 24){  // поправка при выходи часов за границы 24ч 
+            WATERINGhrs = WATERINGhrs - 24; 
+               } 
+           }
+    
+    } else {
+ timer1 = true; // запуск таймера 
+    }
+   wDayNow = 0;
+   flag4 = false;
+
    File dayFile = SD.open("daylog.txt", FILE_WRITE);  // запись нулевого дня для калибровки в случе отклоючения питания 
     dayFile.println(wDayNow);
    dayFile.close();
-    wDayNow = 0;
+    
   digitalWrite(RELAY_W, HIGH);  // watering on 
  
    File dataFile = SD.open("datalog.txt", FILE_WRITE);
@@ -163,10 +200,10 @@ if (hrs < 8 && hrs % 2 == 0 && m == 0 &&  flag3 == true || hrs > 20 && hrs % 2 =
 }
 
 
-if (timer1 == true && hrs == 18 && m == 0 && s == 30){ //проверка таймера на полив теплицы 
+if (timer1 == true && hrs == 18 && m == 0 && s == 30 || WATERINGtimer == true && WATERINGhrs == hrs && WATERINGmin == m){ //проверка таймера на полив теплицы 
 timer1 = false; 
 barrel = true; 
-
+WATERINGtimer == false;
 
   digitalWrite(RELAY_W, LOW); //watering off
 
@@ -179,6 +216,19 @@ barrel = true;
       dataFile.close();
              // отключить полив  
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 if (barrel == true){ // полив теплицы прошел! пора пополнить бочку. 
   barrel = false; 
