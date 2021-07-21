@@ -5,8 +5,8 @@
 #include <Wire.h>
 
 #define RAINPIN A1 //пин датчика
-#define RELAY_W 3 // реле полива теплицы 
-#define RELAY_BARREL 2 // реле пополнения бочки 
+#define RELAY_W 2 // реле полива теплицы 
+#define RELAY_BARREL 3 // реле пополнения бочки 
 #define DHTPIN 4 //датчик температуры и влажности 
 #define MOSFET 5 // транзистор на датчик влажности почвы
 #define GERKON 9
@@ -38,20 +38,20 @@ bool WATERINGtimer = false; // переменная для таймера по W
 int WATERINGmin = 0, WATERINGhrs = 0, WATERINGsec = 0; // в переменную фиксируется текщее время срабатывания флага WATERING + Продолжительность полива с последующей корректировкой вых за границы.
 
 int bMin = 0, bHrs = 0, bSec = 0; // переменные для корректировки времени таймера наполнения бочки 
-int timeoutM = 5, timeoutH = 0, timeoutS = 0; // переменная в минутах. таймаут пополнение бочки. на случай выхода из строя геркона. МОЖНО КОРРЕКТИРОВАТЬ 
+int timeoutM = 13, timeoutH = 0, timeoutS = 0; // переменная в минутах. таймаут пополнение бочки. на случай выхода из строя геркона. МОЖНО КОРРЕКТИРОВАТЬ ФАКТИЧЕСКОЕ ВРЕМЯ 10М21С
 
 int wHrs = 18, wMin = 0, wSec = 0; // тут записано время полива МОЖНО КОРРЕКТИРОВАТЬ 
 int WDHrs = 0, WDMin = 30, WDSec = 4;  //продолжительность полива МОЖНО КОРРЕКТИРОВАТЬ
 
 int WEHrs = 0, WEMin = 0, WESec = 0; //конечное время полива, высчитывается в блоке // текущее время + продолжительность полива 
-
+int i = 0;
  
 uint32_t StartB = 0, StartW = 0; //переменные для храннения времени начала полива или пополнения в МС на случай отказа RTC.  
 uint32_t FinishB = 4000 , FinishW = 4000; // переменные время в МС по истечению которого отключается насаос МОЖНО КОРРЕКТИРОВАТЬ. // 60 000 = 1 минуте // 300 000 = 5 минутам // 600 000 = 10мин
-uint32_t buf;
+
 void setup() {
   watch.begin();
-  watch.settime(55,59,19,16,6,21,3);
+ // watch.settime(40,53,13,11,7,21,7);
   Serial.begin(9600);
   SD.begin(chipSelect);
   dht.begin();
@@ -71,7 +71,37 @@ void setup() {
 
 //**************************проверка на отключение питания и восстановление текущего дня полива.
 
+ dayFile = SD.open("daylog.txt");
+ while (dayFile.available()) {
+      dayFile.read(); 
+      i++;
+    }
+    // close the file:
+    dayFile.close();
+   
+    
 
+  i = i / 3;   // число = 1 байт , /n = 2 делим на 3 и узнаем фактическое количество чисел 
+  i = i - 1; // поправка 
+  
+  for(int j = 0; j <= i; j++){
+
+ if(wDayNow > watrDay){
+  wDayNow = 0;
+  }
+  wDayNow++;
+  }
+wDayNow = wDayNow - 1;
+watch.gettime();
+int hrs = watch.Hours;
+int m = watch.minutes;
+if (wDayNow >= watrDay && hrs >= wHrs && m >= wMin ){
+  WATERING = true; 
+  }
+  Serial.print(wDayNow);
+  if (wDayNow == -1){
+    wDayNow = 0;
+    }
 }
 
 
@@ -157,11 +187,12 @@ if (hrs < 8 && hrs % 2 == 0 && m == 0 &&  flag3 == true || hrs > 20 && hrs % 2 =
  if (wDayNow == watrDay && hrs == wHrs && m == wMin && s == wSec && flag4 == true || WATERING == true && flag4 == true){ // условия для начала полива теплицы 
    
     if(WATERING == true){
-      WATERING = false; 
+      WATERING = false;
+      flag4 = false; 
       WATERINGtimer = true;
-      WATERINGhrs = hrs + wHrs;//WATERING фиксация времени начала полива и прибавление времени полива с учетом минут часов секунд 
-      WATERINGmin = m + wMin;
-      WATERINGsec = s + wSec;
+      WATERINGhrs = hrs + WDHrs;//WATERING фиксация времени начала полива и прибавление времени полива с учетом минут часов секунд 
+      WATERINGmin = m + WDMin;
+      WATERINGsec = s + WDSec;
       
       for(int i = 0; i <= 2; i++){
       if (WATERINGmin > 60){   //поправка при выходе минут за границы 60мин
@@ -244,7 +275,7 @@ if (timer1 == true && hrs == WEHrs && m == WEMin && s == WESec || WATERINGtimer 
 timer1 = false; 
 barrel = true; 
 WATERINGtimer == false;
-
+wDayNow = 0; 
   digitalWrite(RELAY_W, LOW); //watering off
 
  File dataFile = SD.open("datalog.txt", FILE_WRITE);
